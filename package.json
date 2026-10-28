@@ -1,0 +1,18 @@
+{
+  "name": "game-lint",
+  "version": "0.1.0",
+  "description": "Lint rules for game code: no unseeded randomness, real clocks or browser timers in game logic, and no per-item allocation in update and render loops. One plugin for oxlint and ESLint.",
+  "keywords": ["eslint", "eslintplugin", "eslint-plugin", "oxlint", "game", "gamedev", "determinism", "performance", "lint"],
+  "license": "MIT",
+  "homepage": "https://github.com/debuffjp/game-lint#readme",
+  "bugs": "https://github.com/debuffjp/game-lint/issues",
+  "repository": { "type": "git", "url": "git+https://github.com/debuffjp/game-lint.git" },
+  "type": "module",
+  "exports": { ".": "./src/index.js", "./oxlintrc.json": "./oxlintrc.json" },
+  "files": ["src", "oxlintrc.json"],
+  "engines": { "node": ">=20" },
+  "scripts": { "test": "node --test test/rules.test.js" },
+  "peerDependencies": { "eslint": ">=9", "oxlint": ">=1.90.0" },
+  "peerDependenciesMeta": { "eslint": { "optional": true }, "oxlint": { "optional": true } },
+  "devDependencies": { "eslint": "10.13.0", "oxlint": "1.90.0" }
+}

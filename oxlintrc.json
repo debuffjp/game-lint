@@ -1,0 +1,9 @@
+{
+  "jsPlugins": ["game-lint"],
+  "rules": {
+    "game/no-unseeded-random": "error",
+    "game/no-wall-clock": "error",
+    "game/no-real-timers": "error",
+    "game/no-alloc-in-hot-path": "warn"
+  }
+}
