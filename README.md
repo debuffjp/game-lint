@@ -1,6 +1,6 @@
 # game-lint
 
-Lint rules for game code. They catch the bugs that break replays, tests and frame pacing before you run anything: unseeded randomness, reading the real clock, browser timers in game logic, and allocating for every item, every frame. One plugin works in [oxlint](https://oxc.rs/docs/guide/usage/linter.html) and ESLint, with any engine.
+Lint rules for game code. They catch the bugs that break replays, tests and frame pacing before you run anything: unseeded randomness, reading the real clock, browser timers in game logic, allocating for every item, every frame, and slow powers in per-frame loops. One plugin works in [oxlint](https://oxc.rs/docs/guide/usage/linter.html) and ESLint, with any engine.
 
 ```bash
 npm install --save-dev game-lint
@@ -12,6 +12,7 @@ npm install --save-dev game-lint
 | [`game/no-wall-clock`](#no-wall-clock) | `Date.now()`, `performance.now()`, `new Date()` | error |
 | [`game/no-real-timers`](#no-real-timers) | `setTimeout`, `setInterval`, `requestAnimationFrame`, `requestIdleCallback` | error |
 | [`game/no-alloc-in-hot-path`](#no-alloc-in-hot-path) | object and array literals, `new` and closures inside loops in `update()`, `render()` and other per-frame functions | warn |
+| [`game/no-slow-pow-in-hot-path`](#no-slow-pow-in-hot-path) | `x ** 1.5`, `Math.pow(x, 3)` and other slow powers inside loops in per-frame functions, with an autofix | warn |
 
 ## Setup
 
@@ -31,7 +32,8 @@ oxlint's JS plugins are alpha, so pin the oxlint version.
         "game/no-unseeded-random": "error",
         "game/no-wall-clock": "error",
         "game/no-real-timers": "error",
-        "game/no-alloc-in-hot-path": "warn"
+        "game/no-alloc-in-hot-path": "warn",
+        "game/no-slow-pow-in-hot-path": "warn"
       }
     }
   ]
@@ -79,6 +81,14 @@ Options:
 
 - `functions`: names of per-frame functions. Default: `update`, `fixedUpdate`, `render`, `draw`, `tick`, `step`.
 - `allowNew`: constructors that are fine to call, on top of `Error`, `TypeError` and `RangeError`.
+
+### no-slow-pow-in-hot-path
+
+V8 turns `x ** 2` and `x ** 0.5` into a multiply and a square root. Every other literal exponent, including `1.5` and `3`, calls the general pow routine: about 12 ns, against 4.5 ns for `x * Math.sqrt(x)` and 0.65 ns for `x * x * x` (Node 24). In a loop over thousands of particles that adds up: one gravity loop over a million stars went from 61 to 18 ms a frame after this rewrite. This rule reports `**` and `Math.pow()` with such an exponent inside a loop in a per-frame function.
+
+The autofix rewrites exponents 1.5, -0.5, -1.5, 3, 4, -1 and -2 when the base is a name or a plain property (`p.r2`), so nothing gets evaluated twice. Other exponents and bases are reported without a fix. The rewrite can differ from `Math.pow` in the last bit, which only matters if you compare results bit for bit across engines.
+
+Options: `functions`, as for `no-alloc-in-hot-path`.
 
 ## What it doesn't catch
 

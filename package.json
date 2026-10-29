@@ -1,7 +1,7 @@
 {
   "name": "game-lint",
   "version": "0.1.0",
-  "description": "Lint rules for game code: no unseeded randomness, real clocks or browser timers in game logic, and no per-item allocation in update and render loops. One plugin for oxlint and ESLint.",
+  "description": "Lint rules for game code: no unseeded randomness, real clocks or browser timers in game logic, no per-item allocation and no slow powers in update and render loops. One plugin for oxlint and ESLint.",
   "keywords": ["eslint", "eslintplugin", "eslint-plugin", "oxlint", "game", "gamedev", "determinism", "performance", "lint"],
   "license": "MIT",
   "homepage": "https://github.com/debuffjp/game-lint#readme",

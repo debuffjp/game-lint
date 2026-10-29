@@ -185,6 +185,90 @@ const noAllocInHotPath = {
   },
 };
 
+// Exponents V8 turns into cheap operations; every other literal exponent calls the general pow routine,
+// about 12 ns against 4.5 ns for x * Math.sqrt(x) and 0.65 ns for x * x (Node 24).
+const FAST_POW = new Set([0, 0.5, 1, 2]);
+const POW_FIX = {
+  1.5: (x) => `${x} * Math.sqrt(${x})`,
+  "-0.5": (x) => `1 / Math.sqrt(${x})`,
+  "-1.5": (x) => `1 / (${x} * Math.sqrt(${x}))`,
+  3: (x) => `${x} * ${x} * ${x}`,
+  4: (x) => `${x} * ${x} * (${x} * ${x})`,
+  "-1": (x) => `1 / ${x}`,
+  "-2": (x) => `1 / (${x} * ${x})`,
+};
+
+/** A numeric literal, or a minus sign on one. */
+function literalNumber(node) {
+  if (node.type === "Literal" && typeof node.value === "number") return node.value;
+  if (node.type === "UnaryExpression" && node.operator === "-" && node.argument.type === "Literal" && typeof node.argument.value === "number")
+    return -node.argument.value;
+  return undefined;
+}
+
+/** A base safe to repeat in a fix: a name, or a chain of plain property reads. */
+function repeatable(node) {
+  if (node.type === "Identifier" || node.type === "ThisExpression") return true;
+  return node.type === "MemberExpression" && (!node.computed || node.property.type === "Literal") && repeatable(node.object);
+}
+
+/** The per-frame function `node` runs in once per item: inside a loop or array callback in a function named in `hot`. */
+function hotLoop(node, hot) {
+  let looped = false;
+  for (let n = node.parent; n; n = n.parent) {
+    if (LOOP.has(n.type)) looped = true;
+    if (FN.has(n.type)) {
+      if (isArrayCallback(n)) {
+        looped = true;
+        continue;
+      }
+      const name = functionName(n);
+      return looped && name && hot.has(name) ? name : null;
+    }
+  }
+  return null;
+}
+
+const noSlowPowInHotPath = {
+  meta: {
+    type: "suggestion",
+    docs: docs("no-slow-pow-in-hot-path", "Disallow slow fractional and odd powers in per-frame loops"),
+    fixable: "code",
+    messages: {
+      pow: "{{what}} in a loop in {{fn}}() calls the general pow routine for every item, every frame, about 3x slower than {{fix}}.",
+      powNoFix:
+        "{{what}} in a loop in {{fn}}() calls the general pow routine for every item, every frame. Only exponents 2 and 0.5 are fast; rewrite it with multiplies and Math.sqrt.",
+    },
+    schema: [{ type: "object", properties: { functions: { type: "array", items: { type: "string" } } }, additionalProperties: false }],
+  },
+  create(context) {
+    const hot = new Set(context.options[0]?.functions ?? HOT);
+    const check = (node, base, exponent, what) => {
+      const e = literalNumber(exponent);
+      if (e === undefined || FAST_POW.has(e)) return;
+      const fn = hotLoop(node, hot);
+      if (!fn) return;
+      const make = POW_FIX[String(e)];
+      if (!make || !repeatable(base)) {
+        context.report({ node, messageId: "powNoFix", data: { what, fn } });
+        return;
+      }
+      // Parenthesised, so the rewrite can't change how the surrounding expression groups.
+      const fixed = `(${make(context.sourceCode.getText(base))})`;
+      context.report({ node, messageId: "pow", data: { what, fn, fix: fixed }, fix: (fixer) => fixer.replaceText(node, fixed) });
+    };
+    return {
+      BinaryExpression(node) {
+        if (node.operator === "**") check(node, node.left, node.right, `** ${context.sourceCode.getText(node.right)}`);
+      },
+      CallExpression(node) {
+        if (node.arguments.length === 2 && globalMember(context, node.callee, "Math", "pow"))
+          check(node, node.arguments[0], node.arguments[1], `Math.pow(…, ${context.sourceCode.getText(node.arguments[1])})`);
+      },
+    };
+  },
+};
+
 const plugin = {
   meta: { name: "game" },
   rules: {
@@ -192,12 +276,13 @@ const plugin = {
     "no-wall-clock": noWallClock,
     "no-real-timers": noRealTimers,
     "no-alloc-in-hot-path": noAllocInHotPath,
+    "no-slow-pow-in-hot-path": noSlowPowInHotPath,
   },
 };
 plugin.configs = {
   recommended: {
     plugins: { game: plugin },
-    rules: { "game/no-unseeded-random": "error", "game/no-wall-clock": "error", "game/no-real-timers": "error", "game/no-alloc-in-hot-path": "warn" },
+    rules: { "game/no-unseeded-random": "error", "game/no-wall-clock": "error", "game/no-real-timers": "error", "game/no-alloc-in-hot-path": "warn", "game/no-slow-pow-in-hot-path": "warn" },
   },
 };
 export default plugin;

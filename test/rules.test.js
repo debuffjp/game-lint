@@ -47,6 +47,39 @@ const cases = {
       { code: "obj.tick = function () { for (const e of es) e.hit = es.filter((o) => o.near) }", errors: [{ messageId: "alloc" }] },
     ],
   },
+  "no-slow-pow-in-hot-path": {
+    valid: [
+      // Fast exponents, non-literal exponents, once per frame, and code outside per-frame functions.
+      "function update() { for (const p of ps) { p.d = p.r ** 2 + Math.pow(p.s, 0.5) } }",
+      "function update() { for (const p of ps) p.v = p.r ** k }",
+      "function update() { const g = mass ** 1.5 }",
+      "function setup() { for (const p of ps) p.v = p.r ** 1.5 }",
+      "function update(Math) { for (const p of ps) p.v = Math.pow(p.r, 1.5) }",
+    ],
+    invalid: [
+      {
+        code: "function update() { for (const s of stars) s.f = m / r2 ** 1.5 }",
+        output: "function update() { for (const s of stars) s.f = m / (r2 * Math.sqrt(r2)) }",
+        errors: [{ messageId: "pow" }],
+      },
+      {
+        code: "class S { step() { this.ps.forEach((p) => { p.a = Math.pow(p.d2, -1.5) }) } }",
+        output: "class S { step() { this.ps.forEach((p) => { p.a = (1 / (p.d2 * Math.sqrt(p.d2))) }) } }",
+        errors: [{ messageId: "pow" }],
+      },
+      {
+        code: "function render() { for (let i = 0; i < n; i++) v[i] = v[i] ** 3 }",
+        output: null,
+        errors: [{ messageId: "powNoFix" }],
+      },
+      {
+        code: "function tick() { for (const p of ps) p.z = p.x ** 3 }",
+        output: "function tick() { for (const p of ps) p.z = (p.x * p.x * p.x) }",
+        errors: [{ messageId: "pow" }],
+      },
+      { code: "function update() { for (const p of ps) p.v = len(p) ** 1.7 }", errors: [{ messageId: "powNoFix" }] },
+    ],
+  },
 };
 
 for (const [name, RT] of [
